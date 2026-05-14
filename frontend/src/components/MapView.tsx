@@ -6,6 +6,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { supabase } from "@/lib/supabase";
 import { SocietySummary } from "@/types/society";
+import { MOCK_SOCIETIES } from "@/lib/mock-data";
 import SocietyPopup from "./SocietyPopup";
 
 // Fix default marker icon issue with webpack/next.js
@@ -32,6 +33,8 @@ export default function MapView() {
   useEffect(() => {
     async function fetchSocieties() {
       if (!supabase) {
+        // Use mock data when DB is not connected
+        setSocieties(MOCK_SOCIETIES);
         setLoading(false);
         return;
       }
@@ -42,8 +45,9 @@ export default function MapView() {
 
       if (error) {
         console.error("Error fetching societies:", error);
+        setSocieties(MOCK_SOCIETIES);
       } else {
-        setSocieties(data || []);
+        setSocieties(data && data.length > 0 ? data : MOCK_SOCIETIES);
       }
       setLoading(false);
     }

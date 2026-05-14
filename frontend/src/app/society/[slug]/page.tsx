@@ -15,6 +15,15 @@ import BachelorSection from "@/components/society/BachelorSection";
 import VibeSection from "@/components/society/VibeSection";
 import RentSection from "@/components/society/RentSection";
 import LogisticsSection from "@/components/society/LogisticsSection";
+import ContributePanel from "@/components/society/ContributePanel";
+import {
+  MOCK_SOCIETIES,
+  MOCK_SOCIETY,
+  MOCK_BACHELOR_RATINGS,
+  MOCK_VIBE_CHECKS,
+  MOCK_RENT_REPORTS,
+  MOCK_LOGISTICS,
+} from "@/lib/mock-data";
 
 export default function SocietyProfilePage() {
   const params = useParams();
@@ -26,14 +35,29 @@ export default function SocietyProfilePage() {
   const [rentReports, setRentReports] = useState<RentReport[]>([]);
   const [logistics, setLogistics] = useState<Logistics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (!supabase || !slug) {
+    if (!slug) {
       setLoading(false);
       return;
     }
 
     async function fetchData() {
+      // Use mock data when DB is not connected
+      if (!supabase) {
+        const mockMatch = MOCK_SOCIETIES.find((s) => s.slug === slug);
+        if (mockMatch) {
+          setSociety({ ...MOCK_SOCIETY, name: mockMatch.name, slug: mockMatch.slug, area: mockMatch.area });
+          setBachelorRatings(MOCK_BACHELOR_RATINGS);
+          setVibeChecks(MOCK_VIBE_CHECKS);
+          setRentReports(MOCK_RENT_REPORTS);
+          setLogistics(MOCK_LOGISTICS);
+        }
+        setLoading(false);
+        return;
+      }
+
       // Fetch society
       const { data: societyData } = await supabase!
         .from("societies")
@@ -80,7 +104,7 @@ export default function SocietyProfilePage() {
     }
 
     fetchData();
-  }, [slug]);
+  }, [slug, refreshKey]);
 
   if (loading) {
     return (
@@ -163,6 +187,12 @@ export default function SocietyProfilePage() {
 
         {/* Logistics */}
         <LogisticsSection logistics={logistics} />
+
+        {/* Contribute */}
+        <ContributePanel
+          societyId={society.id}
+          onContribution={() => setRefreshKey((k) => k + 1)}
+        />
       </main>
     </div>
   );
