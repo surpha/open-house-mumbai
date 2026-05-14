@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import type { User } from "@supabase/supabase-js";
 
 interface FormData {
   name: string;
@@ -55,6 +56,11 @@ function slugify(name: string): string {
 
 export default function ContributePage() {
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [form, setForm] = useState<FormData>({
     name: "",
     address: "",
@@ -68,6 +74,48 @@ export default function ContributePage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
+
+  async function handleSignIn() {
+    if (!supabase) return;
+    setAuthLoading(true);
+    setAuthError(null);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password: authPassword,
+    });
+    if (error) {
+      setAuthError(error.message);
+    } else {
+      setUser(data.user);
+    }
+    setAuthLoading(false);
+  }
+
+  async function handleSignUp() {
+    if (!supabase) return;
+    setAuthLoading(true);
+    setAuthError(null);
+    const { data, error } = await supabase.auth.signUp({
+      email: authEmail,
+      password: authPassword,
+    });
+    if (error) {
+      setAuthError(error.message);
+    } else if (data.user) {
+      // Create profile
+      await supabase.from("profiles").insert({
+        id: data.user.id,
+        display_name: authEmail.split("@")[0],
+      });
+      setUser(data.user);
+    }
+    setAuthLoading(false);
+  }
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -84,10 +132,6 @@ export default function ContributePage() {
       return;
     }
 
-    // Check auth
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
     if (!user) {
       setError("You must be signed in to add a society.");
       return;
@@ -158,6 +202,59 @@ export default function ContributePage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-8">
+        {/* Auth Gate */}
+        {!user ? (
+          <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+              Sign in to Contribute
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Create an account or sign in to add a society.
+            </p>
+            <div className="space-y-3">
+              <input
+                type="email"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              />
+              <input
+                type="password"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                placeholder="Password (min 6 chars)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              />
+              {authError && (
+                <p className="text-sm text-red-600">{authError}</p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleSignIn}
+                  disabled={authLoading}
+                  className="flex-1 py-2 bg-gray-900 text-white rounded-md text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition"
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSignUp}
+                  disabled={authLoading}
+                  className="flex-1 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  Sign Up
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-4 py-2 mb-6">
+            ✓ Signed in as {user.email}
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Society Name */}
           <div>
@@ -323,7 +420,7 @@ export default function ContributePage() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !user}
             className="w-full py-3 bg-gray-900 text-white font-medium rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
             {submitting ? "Submitting..." : "Add Society"}
