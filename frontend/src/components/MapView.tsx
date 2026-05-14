@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { SocietySummary } from "@/types/society";
 import { MOCK_SOCIETIES } from "@/lib/mock-data";
 import SocietyPopup from "./SocietyPopup";
+import MapFilter, { FilterState } from "./MapFilter";
 
 // Fix default marker icon issue with webpack/next.js
 const defaultIcon = L.icon({
@@ -29,11 +30,16 @@ const DEFAULT_ZOOM = 12;
 export default function MapView() {
   const [societies, setSocieties] = useState<SocietySummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState<FilterState>({
+    search: "",
+    area: "",
+    minBachelorScore: 0,
+    verifiedOnly: false,
+  });
 
   useEffect(() => {
     async function fetchSocieties() {
       if (!supabase) {
-        // Use mock data when DB is not connected
         setSocieties(MOCK_SOCIETIES);
         setLoading(false);
         return;
@@ -55,6 +61,29 @@ export default function MapView() {
     fetchSocieties();
   }, []);
 
+  const areas = useMemo(
+    () => [...new Set(societies.map((s) => s.area))].sort(),
+    [societies]
+  );
+
+  const filtered = useMemo(() => {
+    return societies.filter((s) => {
+      if (filters.search && !s.name.toLowerCase().includes(filters.search.toLowerCase())) {
+        return false;
+      }
+      if (filters.area && s.area !== filters.area) {
+        return false;
+      }
+      if (filters.minBachelorScore > 0 && s.bachelor_index < filters.minBachelorScore) {
+        return false;
+      }
+      if (filters.verifiedOnly && !s.verified) {
+        return false;
+      }
+      return true;
+    });
+  }, [societies, filters]);
+
   return (
     <div className="relative w-full h-full">
       {loading && (
@@ -62,6 +91,10 @@ export default function MapView() {
           <p className="text-lg font-medium text-gray-600">Loading map...</p>
         </div>
       )}
+      <MapFilter areas={areas} onFilterChange={setFilters} />
+      <div className="absolute top-4 right-4 z-[1000] bg-white/90 px-3 py-1.5 rounded-md shadow text-xs text-gray-600">
+        {filtered.length} of {societies.length} societies
+      </div>
       <MapContainer
         center={MUMBAI_CENTER}
         zoom={DEFAULT_ZOOM}
@@ -72,7 +105,7 @@ export default function MapView() {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {societies.map((society) => (
+        {filtered.map((society) => (
           <Marker
             key={society.id}
             position={[society.lat, society.lng]}
